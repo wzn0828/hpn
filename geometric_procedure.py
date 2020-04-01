@@ -20,23 +20,25 @@ import math as m
 pi = m.pi
 
 
-def hypersphere_surface_area(n):
+def hypersphere_surface_area(n, radius):
 # Calculate the surface area of unit radius n sphere
-    log_numerator = 0.5*n*tf.log(pi)+tf.log(2.0)
+    log_numerator = 0.5*n*tf.log(pi)+tf.log(2.0)+(n-1)*tf.log(radius)
     log_denominator = tf.lgamma(0.5*n)
     log_surface_area = log_numerator-log_denominator
     return tf.exp(log_surface_area)
 
-def main(dim, num_vecs):
+def main(dim, num_vecs, radius, delta=0):
     # This algorithm is based on that described in
     # "Uniform distribution of points on a hyper-sphere with applicationsto vector bit-plane encoding"
     matrix = []
+    num = 0
     def recursive_algo(n, delta, w = np.array([]), level = 1):
         nonlocal matrix
+        nonlocal num
         if w == np.array([]):
-            sin_product = 1
+            sin_product = 1*radius
         else:
-            sin_product = np.prod(np.sin(w))
+            sin_product = radius*np.prod(np.sin(w))
         del_w = delta/sin_product
         if n > level+1:
             w_i = del_w/2
@@ -49,26 +51,41 @@ def main(dim, num_vecs):
                 recursive_algo(n, delta, np.append(w, w_i), level+1)
                 w_i += del_w
         else:
+
+            num += 1
+
             x = []
             for i in range(n-1):
                 if i == 0:
-                    x.append(np.cos(w[i]))
+                    x.append(radius*np.cos(w[i]))
                 else:
-                    x.append(np.prod(np.sin(w[:i])) * np.cos(w[i]))
-            x.append(np.prod(np.sin(w)))
+                    x.append(radius*np.prod(np.sin(w[:i]))*np.cos(w[i]))
+            x.append(radius*np.prod(np.sin(w)))
             matrix.append(x)
+
     check = False
-    delta = tf.Session().run(
-        tf.pow(hypersphere_surface_area(dim) / num_vecs, 1 / (tf.constant(dim - 1, dtype=tf.float32))))
+    if delta==0:
+        delta = tf.Session().run(
+            tf.pow(hypersphere_surface_area(dim, radius) / num_vecs, 1 / (tf.constant(dim - 1, dtype=tf.float32))))*10
+
     while check == False:
         # matrix = np.array([])
         recursive_algo(dim, delta)
-        if len(matrix) == num_vecs:
+
+        print('\n The length is:　%d  %d' % (len(matrix), num))
+        print('The delta is:　%f \r' % delta)
+
+        if len(matrix) == num_vecs or num == num_vecs:
             check = True
         else:
-            print(len(matrix))
+            savepath = 'prototypes/GM/%dd-%dc-%.0fr.npy' % (args.dim, len(matrix), radius)
+            np.save(savepath, np.array(matrix))
+
             delta = delta * np.power(len(matrix)/num_vecs, 1/(dim-1))
+            # delta = delta * np.power(num / num_vecs, 1 / (dim - 1))
             matrix = []
+            num = 0
+
     return np.array(matrix)
 
 def display_embedding(matrix):
@@ -100,11 +117,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Construct hyper points on hyperball'
         +'Uniform distribution of points on a hyper-sphere with applicationsto vector bit-plane encoding'
         +'. Example: python construct_matrix.py --dim 3 --num_vecs 30\n\n')
-    parser.add_argument('--dim', type = int, help='Set the dimensions of the embedding space.', required = True)
-    parser.add_argument('--num_vecs', type = int, help='Set the number of vectors to embed in the space.', required = True)
+    parser.add_argument('--dim', type = int, help='Set the dimensions of the embedding space.')
+    parser.add_argument('--num_vecs', type = int, help='Set the number of vectors to embed in the space.')
+    parser.add_argument('--radius', type=float, help='Set the radius of the hypersphere.')
     args = parser.parse_args()
 
-    matrix = main(args.dim, args.num_vecs)
-    savepath = 'prototypes/GM/%dd-%dc.npy' % (args.dim, args.num_vecs)
+    # --- local config --- #
+    args.dim = 512
+    args.num_vecs = 1000
+    args.radius = 5.0
+    args.delta = 5.252609
+    # --- local config --- #
+
+    matrix = main(args.dim, args.num_vecs, args.radius, args.delta)
+
+    savepath = 'prototypes/GM/%dd-%dc-%.0fr.npy' % (args.dim, args.num_vecs, args.radius)
     np.save(savepath, matrix)
+
     # display_embedding(matrix)
