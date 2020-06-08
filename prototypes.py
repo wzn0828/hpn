@@ -58,8 +58,15 @@ def prototype_loss(prototypes):
 
     elif args.losstype == 'hpn-theta':
         # Maxmize min theta.
-        theta = torch.acos(product_.max(dim=1)[0].clamp(-0.99999, 0.99999))
+
+        # theta = torch.acos(product_.max(dim=1)[0].clamp(-0.99999, 0.99999))
+        # loss = -theta.mean()
+
+        # loss = -torch.acos(product_.max().clamp(-0.99999, 0.99999))
+
+        theta = torch.acos(product_.view(-1).topk(prototypes.size(0)//10, sorted=False)[0].clamp(-0.99999, 0.99999))
         loss = -theta.mean()
+
 
     elif args.losstype in ['hpn-global-cosine', 'hpn-global-theta']:
         triu = []
@@ -155,7 +162,7 @@ def perform():
 
     optimizer = optim.SGD([prototypes], lr=args.learning_rate, \
             momentum=args.momentum)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.2, patience=100)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.2, patience=30)
 
     # Optimize for separation.
     min_loss = 0.0
@@ -199,14 +206,14 @@ def perform():
 if __name__ == "__main__":
 
     # local config
-    args.classes = 100
-    args.dims = 1000
+    args.classes = 10572
+    args.dims = 512
     args.learning_rate = 0.1
     args.momentum = 0.9
     args.epochs = 10000
 
     args.losstype = 'hpn-theta'
-    args.loss_skernel_s = 1  # 0, 1, 2
+    args.loss_skernel_s = 0  # 0, 1, 2
     args.loss_lj_r0 = 1.2
     args.loss_lj_p = 6
 
